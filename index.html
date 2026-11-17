@@ -3,9 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rain Over the Skyline – High-Rise Penthouse (WebGPU)</title>
+<title>NEO CITY 2099 — The Penthouse | Cinematic WebGPU</title>
 <style>
 html,body{margin:0;height:100%;background:#04060b;overflow:hidden}
+body{font-family:system-ui,-apple-system,sans-serif}
+#c{touch-action:none}
+#ui-left,#ui-right{z-index:4;max-height:calc(100vh - 112px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:#54647c transparent}
+#ui-left{max-width:calc(100vw - 28px)}
+#ui-right{max-width:calc(100vw - 28px)}
+#topbar{position:fixed;z-index:3;left:22px;right:22px;top:17px;color:#d4e7f9;pointer-events:none;display:flex;justify-content:space-between;align-items:start;gap:18px;text-shadow:0 2px 18px #01050a}
+#topbar .eyebrow{font:600 10px/1.5 system-ui;letter-spacing:.32em;color:#91b9cb}
+#topbar strong{font:500 clamp(16px,2.2vw,24px)/1.35 system-ui;letter-spacing:.12em;display:block}
+#topbar .meta{font:11px/1.6 ui-monospace,monospace;letter-spacing:.07em;color:#b8c7d5;text-align:right}
+#topbar .led{display:inline-block;width:6px;height:6px;background:#69efd5;border-radius:50%;box-shadow:0 0 10px #50dec7;margin-right:8px;animation:pulse 2.7s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35;box-shadow:0 0 3px #50dec7}}
+#toolbar{position:fixed;z-index:5;top:87px;right:22px;display:flex;gap:7px}
+#toolbar button{cursor:pointer;color:#d8e9f3;background:rgba(10,19,31,.6);backdrop-filter:blur(12px);border:1px solid #617b9566;border-radius:5px;padding:7px 10px;font:11px/1.2 system-ui;letter-spacing:.05em}
+#toolbar button:hover{background:rgba(58,105,141,.55)}
+#topbar.hidden,#toolbar.hidden{display:none}
+@media(max-width:850px){#topbar{left:12px;right:12px;top:10px}#topbar strong{font-size:14px}#topbar .meta{font-size:9px}#toolbar{top:60px;right:12px}#ui-left,#ui-right{font-size:11px;max-height:37vh;bottom:9px;padding:8px}#ui-left{left:9px}#ui-right{right:9px}#ui-left input,#ui-right input{width:104px}#ui-left,#ui-right{grid-template-columns:auto 104px 3.5ch;gap:4px}}
+@media(max-width:650px){#ui-left,#ui-right{max-width:49vw;grid-template-columns:minmax(70px,1fr) 80px 3.5ch;gap:3px 5px}#ui-left input,#ui-right input{width:80px}#topbar .meta{display:none}}
 canvas{display:block;width:100%;height:100%;cursor:grab}
 canvas:active{cursor:grabbing}
 #m{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;color:#b9c4dd;font:16px/1.5 system-ui,sans-serif;text-align:center;white-space:pre-wrap}
@@ -25,8 +42,18 @@ canvas:active{cursor:grabbing}
 </style>
 </head>
 <body>
-<canvas id="c" role="img" aria-label="A ray-traced high-rise apartment interior at night overlooking a vast rainy futuristic city with flying vehicles, holographic billboards, and lightning"></canvas>
+<canvas id="c" role="img" aria-label="Cinematic ray-marched high-rise penthouse looking toward a rainy futuristic city, rooftop gardens, maglev railways, commuter shuttles, delivery drones, skyscrapers, and storm clouds"></canvas>
 <div id="m"></div>
+<div id="topbar" aria-hidden="true">
+  <div><div class="eyebrow">HELIOS DISTRICT · SECTOR 07</div><strong>NEO CITY <span style="color:#7de6e0">2099</span></strong></div>
+  <div class="meta"><span class="led"></span><span id="status">LIVE SKYLINE FEED</span><div id="env">ALT 180M · WEATHER / HEAVY RAIN</div></div>
+</div>
+<div id="toolbar">
+  <button id="weatherBtn" title="Cycle weather presets (R)">WEATHER</button>
+  <button id="captureBtn" title="Save a picture of this scene (P)">CAPTURE</button>
+  <button id="fullBtn" title="Toggle fullscreen (F)">FULLSCREEN</button>
+  <button id="hudBtn" title="Hide panels (H)">HIDE HUD</button>
+</div>
 <div id="ui-left">
   <label for="b">Interior lighting</label><input id="b" type="range" min="0" max="4" step="0.05" value="1.15"><output id="bv" for="b">1.15</output>
   <label for="bm">Bloom intensity</label><input id="bm" type="range" min="0" max="3" step="0.05" value="0.80"><output id="bmv" for="bm">0.80</output>
@@ -50,7 +77,7 @@ canvas:active{cursor:grabbing}
   <label for="ds">Drop size</label><input id="ds" type="range" min="0" max="1" step="0.05" value="0.62"><output id="dsv" for="ds">0.62</output>
   <label for="ms">Mist &amp; condensation</label><input id="ms" type="range" min="0" max="1" step="0.01" value="0.36"><output id="msv" for="ms">0.36</output>
   <button id="cb" type="button">Pause camera motion</button>
-  <span>Drag view to look around · Press H to hide HUD</span>
+  <span>Drag to look · H HUD · R weather · P photo · F fullscreen</span>
 </div>
 <div id="ui-right">
   <div class="presets">
@@ -393,6 +420,22 @@ fn sky(d: vec3f, t: f32) -> vec3f {
 
   c += f * vec3f(0.38, 0.48, 0.95) * (0.18 + cl * 1.1) * exp(-elev * 0.75);
 
+  // Partly concealed moon; shallow crater relief and silver lining through storm banks.
+  let moonD = normalize(vec3f(0.52, 0.43, -0.74));
+  let moonDelta = length(d - moonD);
+  let lunarDisc = 1.0 - smoothstep(0.017, 0.020, moonDelta);
+  let lunarHalo = exp(-moonDelta * 23.0) * (0.55 + 0.45 * cl);
+  let lunarRelief = fbm(d.xy * 640.0 + vec2f(29.4, 13.2));
+  let lunarOcc = 1.0 - cl * 0.83;
+  c += vec3f(0.57, 0.71, 0.90) * lunarDisc * (0.72 + 0.35 * lunarRelief) * lunarOcc * 1.65;
+  c += vec3f(0.20, 0.31, 0.48) * lunarHalo * 0.13 * lunarOcc;
+  let cloudSilver = pow(cl, 2.0) * exp(-moonDelta * 15.0) * (0.03 + 0.12 * lunarOcc);
+  c += vec3f(0.18, 0.27, 0.44) * cloudSilver;
+
+  // Vapor-layer convection: broad structures instead of uniform noise alone.
+  let shelf = smoothstep(0.42, 0.75, fbm(cp * 0.46 + vec2f(t * 0.008, -4.1)));
+  c += outdoorAmb(vec3f(0.045, 0.065, 0.092)) * shelf * (1.0 - elev) * 0.50;
+
   if (d.y > 0.01 && d.z < -0.15) {
     let uvSky = d.xy / (-d.z);
     for (var s = 0; s < 2; s++) {
@@ -472,6 +515,30 @@ fn bld(p: vec3f, rd: vec3f, n: vec3f, ct: vec3f, yBase: f32, H: f32, halfW: vec2
       let padCol = mix(vec3f(0.1, 0.85, 1.0), vec3f(1.0, 0.65, 0.15), step(0.5, r3));
       c += padCol * (ring * 1.8 + hMark * 1.5) * (0.75 + 0.25 * sin(t * 3.0 + r1 * 12.0));
     }
+    // Solar collecting fields: blue-black reflective cells with silver gridlines.
+    if (r2 < 0.52 && H > 62.0 && tier == 0) {
+      let solarArea = (1.0 - smoothstep(halfW.x * 0.42, halfW.x * 0.56, abs(rp.x)))
+                    * (1.0 - smoothstep(halfW.y * 0.42, halfW.y * 0.56, abs(rp.y)));
+      let cells = fract(rp * 0.55);
+      let joint = select(0.0, 1.0, min(min(cells.x, 1.0 - cells.x), min(cells.y, 1.0 - cells.y)) < 0.045);
+      let reflection = pow(max(dot(reflect(rd, n), normalize(vec3f(0.3, 0.8, -0.5))), 0.0), 11.0);
+      c = mix(c, vec3f(0.025, 0.052, 0.092) + vec3f(0.14, 0.22, 0.27) * reflection + vec3f(0.11) * joint, solarArea * 0.84);
+    }
+    // A small fraction of roofs are living terraces with planted areas and pathways.
+    if (r2 > 0.74 && H > 65.0 && tier == 0) {
+      let border = max(abs(rp.x) / max(halfW.x, 1.0), abs(rp.y) / max(halfW.y, 1.0));
+      let garden = (1.0 - smoothstep(0.60, 0.78, border)) * smoothstep(0.19, 0.34, fbm(rp * 0.35 + r1 * 20.0));
+      let vegetation = vec3f(0.017, 0.094, 0.061) * (0.65 + 0.5 * vn(rp * 1.3));
+      let path = (1.0 - smoothstep(0.35, 0.66, abs(rp.x))) * 0.48;
+      c = mix(c, vegetation + vec3f(0.017, 0.035, 0.025), garden * (1.0 - path));
+      let accent = (1.0 - smoothstep(0.08, 0.24, abs(border - 0.80))) * 0.52;
+      c += vec3f(0.12, 0.48, 0.32) * accent * u.ml;
+    }
+    // Equipment hatches, grilles, weathering and pools in the rooftop membrane.
+    let deckTex = vn(rp * 0.42 + r3 * 11.0);
+    let hvac = step(0.70, h2(floor(rp / 3.0) + r1 * 17.0));
+    let grille = step(0.67, fract(rp.x * 2.2)) * hvac;
+    c += (vec3f(0.024, 0.031, 0.044) * (0.5 + deckTex) + vec3f(0.030, 0.042, 0.049) * grille) * (1.0 + f * 1.7);
     return c;
   }
 
@@ -540,6 +607,45 @@ fn bld(p: vec3f, rd: vec3f, n: vec3f, ct: vec3f, yBase: f32, H: f32, halfW: vec2
     pd
   );
   c += adjustSat(winCol, u.ws);
+
+  // Exterior structure: relief of load-bearing piers and alternating curtain-wall rhythms.
+  let facadeStyle = floor(r3 * 5.0);
+  let pierPeriod = select(4.0, 6.0, facadeStyle > 2.0);
+  let pier = (1.0 - smoothstep(0.045, 0.12, abs(fract(colIdx / pierPeriod) - 0.5))) * (1.0 - pd);
+  c = mix(c, c * 0.57 + vec3f(0.013, 0.024, 0.036), pier * 0.5);
+  let finlet = (1.0 - smoothstep(0.025, 0.078, abs(fu - 0.07))) * step(0.62, r1);
+  c += vec3f(0.035, 0.048, 0.068) * finlet * (1.0 - pd * 0.5);
+
+  // Slightly recessed balcony slabs and railings on residential skyscrapers.
+  if (r3 > 0.51 && r2 < 0.72 && H > 70.0) {
+    let balconyFloor = step(0.78, h2(vec2f(floorIdx * 0.29, r2 * 80.0)));
+    let slab = (1.0 - smoothstep(0.035, 0.085, fv)) * balconyFloor;
+    let rail = (1.0 - smoothstep(0.015, 0.052, abs(fv - 0.37))) * balconyFloor;
+    let post = (1.0 - smoothstep(0.022, 0.07, abs(fract(fu * 3.0) - 0.5))) * step(0.07, fv) * (1.0 - step(0.39, fv));
+    c = mix(c, vec3f(0.022, 0.038, 0.058) * (1.0 + f * 2.1), max(slab * 0.83, rail * 0.50) * (1.0 - pd * 0.72));
+    c += vec3f(0.047, 0.063, 0.071) * post * balconyFloor * 0.45 * (1.0 - pd);
+  }
+
+  // A few apartments reveal silhouettes, a partition, or a lit ceiling beyond the glass.
+  let inhabited = step(0.43, sd) * step(0.66, h2(cl * 2.1 + r2 * 9.0));
+  let personX = 0.17 + 0.65 * h2(cl * 3.7 + 2.3);
+  let head = 1.0 - smoothstep(0.028, 0.065, length((vec2f(parU - personX, parV - 0.52)) * vec2f(1.0, 1.30)));
+  let torso = (1.0 - smoothstep(0.055, 0.125, abs(parU - personX))) * step(0.07, parV) * (1.0 - step(0.48, parV));
+  let silhouette = max(head, torso) * inhabited * w * step(0.57, r3) * (1.0 - pd);
+  c *= 1.0 - silhouette * 0.57;
+  let roomDivider = (1.0 - smoothstep(0.012, 0.030, abs(parU - 0.56))) * step(0.42, h2(cl + 19.7));
+  c *= 1.0 - roomDivider * inhabited * w * 0.26 * (1.0 - pd);
+
+  // Machine levels and sky-garden floors punctuate the repetitive window pattern.
+  let service = step(0.91, h2(vec2f(floorIdx * 0.15, r1 * 88.0))) * (1.0 - isTopParapet);
+  let serviceRib = step(0.50, fract(us * 0.37 + floorIdx * 0.21));
+  c = mix(c, vec3f(0.035, 0.050, 0.069) + vec3f(0.035, 0.10, 0.14) * serviceRib * u.ml, service * w * 0.28 * (1.0 - pd));
+  if (r2 > 0.68 && tier == 0) {
+    let skyGarden = step(0.955, h2(vec2f(floorIdx * 0.20, r1 * 33.0))) * (1.0 - isTopParapet);
+    let foliage = (0.55 + 0.45 * vn(vec2f(us * 1.4, floorIdx * 7.1))) * skyGarden;
+    c += vec3f(0.025, 0.13, 0.073) * foliage * (1.0 - pd) * w;
+    c += vec3f(0.12, 0.33, 0.28) * (1.0 - smoothstep(0.028, 0.095, abs(fv - 0.14))) * skyGarden * u.ml * 0.65;
+  }
 
   // Vertical Neon Signage Blades
   let s1 = h2(vec2f(r1, r2) * 9.1);
@@ -1025,6 +1131,97 @@ fn veh(o: vec3f, d: vec3f, t: f32, dist: f32) -> VehRes {
   return res;
 }
 
+
+/* ---------- Elevated maglev arteries and articulated commuter shuttles ---------- */
+fn transit(ro: vec3f, rd: vec3f, time: f32, maxDist: f32) -> vec4f {
+  var best = maxDist;
+  var result = vec4f(0.0, 0.0, 0.0, -1.0);
+  for (var i = 0; i < 3; i++) {
+    let fi = f32(i);
+    let zc = -240.0 - fi * 144.0;
+    let h = 117.0 + fi * 20.0;
+    let railHit = bx(ro - vec3f(0.0, h, zc), rd, vec3f(1250.0, 0.48, 2.8));
+    if (railHit.x > 0.0 && railHit.x < best) {
+      let pos = ro + rd * railHit.x;
+      let side = abs(pos.z - zc);
+      let railEdge = smoothstep(1.65, 2.70, side);
+      let lane = 1.0 - smoothstep(0.08, 0.29, abs(side - 1.25));
+      let wet = 0.7 + 0.3 * vn(pos.xz * 0.15);
+      let base = vec3f(0.021, 0.035, 0.047) * wet
+               + vec3f(0.018, 0.040, 0.057) * (1.0 - railEdge);
+      let leds = vec3f(0.025, 0.85, 1.2) * railEdge * 1.10 * u.ml
+               + vec3f(0.24, 0.26, 0.34) * lane * 0.4;
+      let joints = 1.0 - smoothstep(0.05, 0.18, abs(fract(pos.x / 9.0) - 0.5));
+      let color = base + leds + vec3f(0.12) * joints * 0.13;
+      best = railHit.x;
+      result = vec4f(color, best);
+    }
+    for (var j = 0; j < 2; j++) {
+      let fj = f32(j);
+      let direction = select(-1.0, 1.0, j == 0);
+      let speed = 32.0 + fi * 6.0;
+      let carX = (fract(time * speed / 1800.0 * direction + fj * 0.31 + fi * 0.37) - 0.5) * 1800.0;
+      let carZ = zc + select(-1.34, 1.34, j == 1);
+      let carY = h + 1.55;
+      let trainC = vec3f(carX, carY, carZ);
+      let carHit = bx(ro - trainC, rd, vec3f(13.8, 1.18, 0.95));
+      if (carHit.x > 0.0 && carHit.x < best) {
+        let pos = ro + rd * carHit.x - trainC;
+        let surfaceNormal = carHit.yzw;
+        let forward = pos.x * direction;
+        let windshield = step(11.0, forward) * (1.0 - step(0.65, abs(pos.y)));
+        let glaz = (1.0 - smoothstep(0.0, 0.10, abs(pos.y - 0.10))) * 0.28;
+        let windows = step(0.12, fract((pos.x + 13.8) * 0.35)) * step(0.0, pos.y) * step(0.30, abs(surfaceNormal.z));
+        let running = (1.0 - smoothstep(0.09, 0.22, abs(pos.y + 0.8)));
+        let metallic = vec3f(0.105, 0.13, 0.15) + outdoorAmb(vec3f(0.055, 0.07, 0.11));
+        let cabGlass = vec3f(0.027, 0.085, 0.13) + vec3f(0.03, 0.25, 0.38) * windows;
+        let illuminated = vec3f(0.20, 0.68, 0.94) * windows * 0.75;
+        var color = mix(metallic, cabGlass, max(windows * 0.82, windshield * 0.90)) + illuminated;
+        color += vec3f(0.05, 0.65, 0.91) * running * u.ml;
+        let head = step(13.15, forward) * step(abs(pos.z), 0.72);
+        let tail = step(13.1, -forward) * step(abs(pos.z), 0.72);
+        color += vec3f(5.5, 5.3, 4.3) * head * u.vl + vec3f(4.6, 0.12, 0.055) * tail * u.vl;
+        color += vec3f(0.6, 0.8, 1.0) * glaz * 0.2;
+        best = carHit.x;
+        result = vec4f(color, best);
+      }
+    }
+  }
+  if (result.w > 0.0) {
+    let fog = 1.0 - exp(-result.w * 0.00150);
+    result = vec4f(mix(result.rgb, fogc(rd, time), fog), result.w);
+  }
+  return result;
+}
+
+/* ---------- Micro-delivery drones, blinking position lights and collision beacons ---------- */
+fn microDrones(ro: vec3f, rd: vec3f, time: f32, maxDist: f32) -> vec3f {
+  var glow = vec3f(0.0);
+  if (u.k.w < 0.05) { return glow; }
+  for (var i = 0; i < 10; i++) {
+    let fi = f32(i);
+    let seed = fi * 9.171 + 3.41;
+    let cx = sin(time * (0.08 + fi * 0.012) + seed) * (170.0 + fi * 37.0);
+    let cy = 152.0 + fi * 18.5 + sin(time * 0.45 + fi * 2.7) * 2.3;
+    let cz = -105.0 - fi * 62.0 - cos(time * 0.14 + fi) * 28.0;
+    let pos = vec3f(cx, cy, cz);
+    let distance = dot(pos - ro, rd);
+    if (distance < 3.0 || distance > maxDist || distance > 1350.0) { continue; }
+    let dd = length(pos - (ro + rd * distance));
+    let beamSize = 0.44 + distance * 0.00068;
+    let shape = exp(-pow(dd / beamSize, 2.0) * 1.8);
+    let strobe = 0.30 + 0.70 * step(0.86, fract(time * (1.7 + fi * 0.035) + seed));
+    let col = select(vec3f(0.35, 1.25, 1.9), vec3f(2.7, 0.32, 0.16), i % 3 == 0);
+    glow += col * shape * strobe * u.vl * u.k.w * exp(-distance * 0.0015) * 0.62;
+    // Tiny rear navigation lamp gives each aircraft a sense of direction.
+    let tailOffset = pos + vec3f(1.45, 0.0, 0.0);
+    let tc = dot(tailOffset - ro, rd);
+    let tailSeparation = length(tailOffset - (ro + rd * tc));
+    glow += vec3f(0.85, 0.13, 0.08) * exp(-pow(tailSeparation / (beamSize * 0.75), 2.0) * 2.0) * 0.26 * u.vl;
+  }
+  return glow;
+}
+
 /* ---------- Distant Horizon Aerial Highway Light Streams ---------- */
 fn horizonTraffic(d: vec3f, t: f32) -> vec3f {
   if (u.k.w < 0.05 || d.z > -0.1 || abs(d.y) > 0.26) {
@@ -1062,7 +1259,8 @@ fn fin(o: vec3f, d: vec3f, t: f32, base: vec3f, dist: f32) -> vec3f {
   if (vh.dist > 0.0) {
     r = vh.col;
   }
-  return r + vh.glow;
+  let finalDist = select(dd, vh.dist, vh.dist > 0.0);
+  return r + vh.glow + microDrones(o, d, t, finalDist);
 }
 
 /* ---------- City Grid DDA Traversal with Tiered Towers & Spires ---------- */
@@ -1135,9 +1333,28 @@ fn city(o: vec3f, d0: vec3f, t: f32) -> vec3f {
         }
       }
 
+      // Actual rooftop mechanical penthouses, not simply painted rooftop textures.
+      if (r3 > 0.37 && r3 < 0.78 && H > 78.0) {
+        let svcCenter = vec3f(ct.x + halfW.x * 0.22, H + 2.3, ct.z - halfW.y * 0.19);
+        let svc = bx(o - svcCenter, d, vec3f(halfW.x * 0.34, 2.3, halfW.y * 0.30));
+        if (svc.x > 0.0 && svc.x < bestCellT) {
+          bestCellT = svc.x;
+          bestN = svc.yzw;
+          bestCt = svcCenter;
+          bestTier = 3;
+        }
+      }
+
       if (bestCellT < tg && bestCellT < 1e8) {
         let pHit = o + d * bestCellT;
-        if (bestTier == 2) {
+        if (bestTier == 3) {
+          let gp = pHit - bestCt;
+          let vents = step(0.52, fract(gp.x * 1.1)) * step(0.4, abs(bestN.z));
+          col = vec3f(0.024, 0.032, 0.042) * (1.0 + max(fla(t), 0.0) * 3.0)
+              + vec3f(0.028, 0.045, 0.057) * vents;
+          let red = step(0.95, fract(t * 0.7 + r1));
+          col += vec3f(2.3, 0.12, 0.08) * red * (1.0 - smoothstep(0.10, 0.40, length(gp.xz)));
+        } else if (bestTier == 2) {
           let tip = smoothstep(bestH - 2.5, bestH - 0.2, pHit.y);
           let pulse = 0.4 + 0.6 * step(0.5, fract(t * 0.85 + r3));
           col = vec3f(0.03, 0.04, 0.06) + tip * vec3f(6.5, 0.15, 0.10) * pulse;
@@ -1174,7 +1391,13 @@ fn city(o: vec3f, d0: vec3f, t: f32) -> vec3f {
   }
 
   let fc = fogc(d, t);
-  let blended = mix(col, fc, 1.0 - exp(-dist * 0.00135)) + select(vec3f(0.0), horizonTraffic(d, t), !hit);
+  var blended = mix(col, fc, 1.0 - exp(-dist * 0.00135)) + select(vec3f(0.0), horizonTraffic(d, t), !hit);
+  // Proper depth-tested transit: bridges and shuttle cars can be hidden by towers.
+  let metro = transit(o, d, t, dist);
+  if (metro.w > 0.0) {
+    blended = metro.rgb;
+    dist = metro.w;
+  }
   return fin(o, d, t, blended, dist);
 }
 
@@ -1259,6 +1482,11 @@ fn outside(o: vec3f, d: vec3f, tg: f32, pri: bool, t: f32) -> vec3f {
     let coveRefl = vec3f(0.85, 0.58, 0.32) * smoothstep(0.15, 0.55, reflD.y) * 0.14 * u.q;
     let tabletRefl = vec3f(0.30, 0.68, 1.0) * pow(max(dot(reflD, normalize(vec3f(0.05, 0.44, -2.08) - g)), 0.0), 48.0) * 0.45 * u.q;
     c += (lampRefl + coveRefl + tabletRefl) * fres;
+    // Soft long-reflection from a strip of interior ceiling coves.
+    let stripDir = normalize(vec3f(0.58, 0.40, 0.72));
+    let stripAlignment = pow(max(dot(reflD, stripDir), 0.0), 11.0);
+    let ledWobble = 0.75 + 0.25 * fbm(g.xy * 16.0);
+    c += vec3f(0.18, 0.35, 0.45) * stripAlignment * fres * 0.72 * u.q * ledWobble;
   } else if (u.mist > 0.001) {
     let reflMist = u.mist * (0.65 + 0.35 * fbm(g.xy * 18.0));
     c = mix(c * (1.0 - 0.35 * reflMist), fogc(dd, t) * 0.65, 0.28 * reflMist);
@@ -1338,6 +1566,11 @@ fn mp(p: vec3f) -> vec2f {
   let leaf2 = length((cq - vec3f(0.02, 1.24, 0.06)) * vec3f(1.4, 0.85, 1.4)) - 0.19;
   r = opU(r, vec2f(min(leaf1, leaf2), 8.0));
 
+  // Transparent-looking floating data plaque on an unobtrusive side console.
+  let screen = rb(p - vec3f(3.64, 1.14, -3.05), vec3f(0.59, 0.36, 0.010), 0.015);
+  let edge = rb(p - vec3f(3.64, 1.14, -3.08), vec3f(0.63, 0.39, 0.016), 0.013);
+  r = opU(r, vec2f(edge, 3.0));
+  r = opU(r, vec2f(screen, 9.0));
   return r;
 }
 
@@ -1463,10 +1696,20 @@ fn shade(p: vec3f, n: vec3f, rd: vec3f, m: f32, t: f32) -> vec4f {
     em = vec3f(0.45, 0.85, 1.35) * u.q;
     rf = 0.75 * (1.0 - 0.70 * u.mist);
     sh = mix(200.0, 18.0, u.mist);
-  } else {
+  } else if (m < 8.5) {
     al = vec3f(0.018, 0.048, 0.026);
     rf = 0.12;
     sh = 45.0;
+  } else {
+    let hp = vec2f((p.x - 3.64) / 1.2 + 0.5, (p.y - 1.14) / 0.72 + 0.5);
+    let gridX = 1.0 - smoothstep(0.008, 0.023, abs(fract(hp.x * 9.0) - 0.5));
+    let gridY = 1.0 - smoothstep(0.009, 0.024, abs(fract(hp.y * 7.0) - 0.5));
+    let scan = 1.0 - smoothstep(0.018, 0.045, abs(fract(hp.y * 1.5 - t * 0.055) - 0.5));
+    let data = step(0.55, h2(floor(hp * vec2f(15.0, 9.0)))) * step(0.10, hp.x) * step(hp.x, 0.93);
+    em = vec3f(0.045, 0.36, 0.47) * (gridX + gridY * 0.7 + scan * 0.6 + data * 0.45) * u.q;
+    al = vec3f(0.010, 0.029, 0.040);
+    rf = 0.20;
+    sh = 65.0;
   }
 
   let lp = vec3f(2.05, 1.88, -2.35);
@@ -1592,8 +1835,11 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
 
   let v = uv - 0.5;
   c *= 1.0 - dot(v, v) * 0.82;
-  c += (h2(fp.xy + u.t * 61.0) - 0.5) * 0.022;
-  return vec4f(c, 1.0);
+  // Sensor grain, restrained chromatic atmosphere and fine edge sharpening.
+  c += (h2(fp.xy + u.t * 61.0) - 0.5) * 0.010;
+  let atmosphericBlue = vec3f(0.985, 1.008, 1.025);
+  c *= atmosphericBlue;
+  return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)), 1.0);
 }
 `;
 
@@ -1645,29 +1891,62 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     return;
   }
   const dev = await ad.requestDevice();
-  dev.addEventListener('uncapturederror', e => say('GPU error:\n' + e.error.message));
+  let gpuFaulted = false;
+  dev.addEventListener('uncapturederror', e => {
+    if (gpuFaulted) return;
+    gpuFaulted = true;
+    say('WebGPU rendering stopped:\n' + (e.error?.message || 'An unexpected GPU validation error occurred.'));
+  });
+  dev.lost.then(info => {
+    if (gpuFaulted || info.reason === 'destroyed') return;
+    gpuFaulted = true;
+    say('WebGPU device lost:\n' + (info.message || info.reason || 'Unknown device error'));
+  });
 
   const ctx = cv.getContext('webgpu');
   const fmt = navigator.gpu.getPreferredCanvasFormat();
   ctx.configure({ device: dev, format: fmt, alphaMode: 'opaque' });
 
-  const mod = dev.createShaderModule({ code: WGSL });
-  mod.getCompilationInfo().then(info => {
-    const errs = info.messages.filter(m => m.type === 'error');
-    if (errs.length) {
-      say('Shader error:\n' + errs.map(m => m.lineNum + ': ' + m.message).join('\n'));
-    }
-  });
+  // Compile and validate FIRST. Do not create a pipeline, bind group or frame
+  // when WGSL fails; otherwise one syntax error causes hundreds of GPU warnings.
+  const mod = dev.createShaderModule({ label: 'Neo City 2099 scene shader', code: WGSL });
+  let compilation;
+  try {
+    compilation = await mod.getCompilationInfo();
+  } catch (err) {
+    say('Could not compile the WebGPU shader:\n' + String(err));
+    return;
+  }
+  const shaderErrors = compilation.messages.filter(m => m.type === 'error');
+  if (shaderErrors.length) {
+    const diagnostic = shaderErrors.map(m =>
+      'Line ' + m.lineNum + ', column ' + m.linePos + ': ' + m.message
+    ).join('\n\n');
+    console.error('Neo City shader compilation failed:\n' + diagnostic);
+    say('WebGPU shader compilation failed:\n' + diagnostic);
+    return;
+  }
 
-  const mkP = (fs, f) => dev.createRenderPipeline({
+  // Async creation reports validation errors as a catchable exception rather
+  // than leaving invalid pipeline objects in the frame loop.
+  const mkP = (fs, f) => dev.createRenderPipelineAsync({
+    label: 'Neo City ' + fs + ' pipeline',
     layout: 'auto',
     vertex: { module: mod, entryPoint: 'vs' },
     fragment: { module: mod, entryPoint: fs, targets: [{ format: f }] },
     primitive: { topology: 'triangle-list' }
   });
 
-  const sp = mkP('sf', 'rgba16float');
-  const pp = mkP('pf', fmt);
+  let sp, pp;
+  try {
+    sp = await mkP('sf', 'rgba16float');
+    pp = await mkP('pf', fmt);
+  } catch (err) {
+    gpuFaulted = true;
+    console.error('Neo City pipeline initialization failed:', err);
+    say('WebGPU pipeline initialization failed:\n' + (err?.message || String(err)));
+    return;
+  }
   const ub = dev.createBuffer({ size: 128, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const smp = dev.createSampler({ magFilter: 'linear', minFilter: 'linear' });
   let tex, bg0, bg1, W = 2, H = 2;
@@ -2069,7 +2348,7 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     const s = Math.min(devicePixelRatio || 1, 1.5);
     const w = innerWidth * s;
     const h = innerHeight * s;
-    const k = Math.min(1, Math.sqrt(2.3e6 / (w * h)));
+    const k = Math.min(1, Math.sqrt(1.65e6 / (w * h))); // conservative cap for elaborate ray-marched geometry
     W = Math.max(2, Math.floor(w * k));
     H = Math.max(2, Math.floor(h * k));
     cv.width = W;
@@ -2100,6 +2379,7 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
 
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function draw(t) {
+    if (gpuFaulted) return;
     lookX += (targetLookX - lookX) * 0.08;
     lookY += (targetLookY - lookY) * 0.08;
     camMix += ((camMoving ? 1.0 : 0.0) - camMix) * 0.07;
@@ -2140,8 +2420,9 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
 
   size();
   const loop = ms => {
+    if (gpuFaulted) return;
     draw(ms / 1000);
-    if (!reduce) requestAnimationFrame(loop);
+    if (!reduce && !gpuFaulted) requestAnimationFrame(loop);
   };
   if (reduce) draw(20);
   else requestAnimationFrame(loop);
@@ -2167,10 +2448,14 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     if (reduce) draw(20);
   }
 
+  let selectedWeather = 'downpour';
   document.querySelectorAll('[data-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
       const cfg = PRESETS[btn.dataset.preset];
       if (!cfg) return;
+      selectedWeather = btn.dataset.preset;
+      document.getElementById('env').textContent = 'ALT 180M · WEATHER / ' + ({downpour:'HEAVY RAIN',storm:'ELECTRICAL STORM',drizzle:'LIGHT RAIN',clear:'CLEAR SKY'}[selectedWeather]);
+      for (const b of document.querySelectorAll('[data-preset]')) b.setAttribute('aria-pressed', String(b===btn));
       for (const [k, v] of Object.entries(cfg)) {
         const el = document.getElementById(k);
         if (el) el.value = v;
@@ -2191,12 +2476,40 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     });
   }
 
+  const topbar = document.getElementById('topbar');
+  const toolbar = document.getElementById('toolbar');
+  function setHUD(visible) {
+    uiLeft.hidden = !visible;
+    uiRight.hidden = !visible;
+    topbar.classList.toggle('hidden', !visible);
+    toolbar.classList.toggle('hidden', !visible);
+  }
+  function cycleWeather() {
+    const keys = Object.keys(PRESETS);
+    const next = keys[(keys.indexOf(selectedWeather) + 1) % keys.length];
+    document.querySelector(`[data-preset="${next}"]`).click();
+  }
+  function capture() {
+    const a = document.createElement('a');
+    a.download = 'Neo-City-2099-' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+    a.href = cv.toDataURL('image/png');
+    a.click();
+  }
+  const full = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.();
+  };
+  document.getElementById('weatherBtn').addEventListener('click', cycleWeather);
+  document.getElementById('captureBtn').addEventListener('click', capture);
+  document.getElementById('fullBtn').addEventListener('click', full);
+  document.getElementById('hudBtn').addEventListener('click', () => setHUD(false));
   addEventListener('keydown', e => {
-    if (e.key === 'h' || e.key === 'H') {
-      const h = !uiLeft.hidden;
-      uiLeft.hidden = h;
-      uiRight.hidden = h;
-    }
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'h') setHUD(uiLeft.hidden);
+    if (key === 'r') cycleWeather();
+    if (key === 'p') capture();
+    if (key === 'f') full();
   });
 
   let rt;
@@ -2207,7 +2520,14 @@ fn pf(@builtin(position) fp: vec4f) -> @location(0) vec4f {
       if (reduce) draw(20);
     }, 150);
   });
-})();
+})().catch(err => {
+  console.error('Neo City could not start:', err);
+  const message = document.getElementById('m');
+  if (message) {
+    message.style.display = 'flex';
+    message.textContent = 'Could not start the scene:\n' + (err?.message || String(err));
+  }
+});
 </script>
 </body>
 </html>
